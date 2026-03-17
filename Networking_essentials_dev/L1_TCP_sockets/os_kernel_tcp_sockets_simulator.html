@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OS Kernel TCP Simulator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg-deep: #0a0e17;
+            --bg-surface: #111827;
+            --bg-card: #1a2332;
+            --bg-elevated: #243044;
+            --border-dim: rgba(255, 255, 255, 0.06);
+            --border-med: rgba(255, 255, 255, 0.12);
+            --border-bright: rgba(255, 255, 255, 0.2);
+            --text-primary: #e8edf5;
+            --text-secondary: #8892a4;
+            --text-dim: #5a6478;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --glow-blue: rgba(59, 130, 246, 0.15);
+            --glow-green: rgba(16, 185, 129, 0.15);
+            --glow-amber: rgba(245, 158, 11, 0.15);
+            --glow-red: rgba(239, 68, 68, 0.12);
+            --glow-purple: rgba(139, 92, 246, 0.15);
+            --glow-cyan: rgba(6, 182, 212, 0.15);
+            --radius: 10px;
+            --radius-lg: 14px;
+            --radius-sm: 6px;
+            --font-main: 'Outfit', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body {
+            background-image:
+                radial-gradient(ellipse 600px 400px at 20% 10%, rgba(59, 130, 246, 0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 300px at 80% 90%, rgba(139, 92, 246, 0.05) 0%, transparent 70%);
+        }
+
+        .app {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+        }
+
+        /* HEADER */
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #3b82f6, #06b6d4, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 6px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* INFO BAR */
+        .info-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-med);
+            border-radius: var(--radius-lg);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            min-height: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--accent-blue), var(--accent-cyan));
+            border-radius: 3px 0 0 3px;
+        }
+
+        .info-bar b {
+            color: var(--text-primary);
+        }
+
+        .info-bar code {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            background: var(--bg-elevated);
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: var(--accent-cyan);
+        }
+
+        /* CONTROLS */
+        .controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .controls button {
+            font-family: var(--font-main);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-med);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .controls button:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+        }
+
+        .controls button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .controls button.active-step {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            box-shadow: 0 0 12px var(--glow-blue);
+        }
+
+        .controls button.done-step {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .btn-reset {
+            border-color: var(--accent-red) !important;
+            color: var(--accent-red) !important;
+        }
+
+        .btn-reset:hover:not(:disabled) {
+            background: var(--glow-red) !important;
+            border-color: var(--accent-red) !important;
+        }
+
+        /* MAIN DIAGRAM */
+        .diagram-container {
+            position: relative;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .zone-label {
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%) rotate(180deg);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            padding: 12px 6px;
+            border-radius: 0 6px 6px 0;
+            z-index: 2;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .zone-physical {
+            color: #fff;
+            background: linear-gradient(to bottom, var(--accent-amber), #d97706);
+        }
+
+        .zone-ram {
+            color: #fff;
+            background: linear-gradient(to bottom, var(--accent-purple), #7c3aed);
+        }
+
+        .zone-kernel {
+            color: #fff;
+            background: linear-gradient(to bottom, var(--accent-blue), #2563eb);
+        }
+
+        .zone-user {
+            color: #fff;
+            background: linear-gradient(to bottom, var(--accent-green), #059669);
+        }
+
+        /* LAYER SECTIONS */
+        .layer-section {
+            position: relative;
+            padding: 20px 20px 20px 45px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            border: 1px solid var(--border-dim);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .layer-section:hover {
+            border-color: var(--border-med);
+        }
+
+        .layer-physical {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, transparent 60%);
+            border-left: 3px solid var(--accent-amber);
+        }
+
+        .layer-ram {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.04) 0%, transparent 60%);
+            border-left: 3px solid var(--accent-purple);
+        }
+
+        .layer-kernel {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, transparent 60%);
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .layer-user {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, transparent 60%);
+            border-left: 3px solid var(--accent-green);
+        }
+
+        /* COMPONENT BOX */
+        .comp {
+            position: relative;
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin: 6px 0;
+            background: var(--bg-card);
+            transition: all 0.5s ease;
+            cursor: pointer;
+        }
+
+        .comp:hover {
+            border-color: var(--border-bright);
+        }
+
+        .comp.lit-amber {
+            border-color: var(--accent-amber);
+            box-shadow: 0 0 20px var(--glow-amber), inset 0 0 20px rgba(245, 158, 11, 0.04);
+        }
+
+        .comp.lit-blue {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 20px var(--glow-blue), inset 0 0 20px rgba(59, 130, 246, 0.04);
+        }
+
+        .comp.lit-green {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 20px var(--glow-green), inset 0 0 20px rgba(16, 185, 129, 0.04);
+        }
+
+        .comp.lit-purple {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 20px var(--glow-purple), inset 0 0 20px rgba(139, 92, 246, 0.04);
+        }
+
+        .comp.lit-cyan {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px var(--glow-cyan), inset 0 0 20px rgba(6, 182, 212, 0.04);
+        }
+
+        .comp-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comp-title .icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .comp-sub {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 4px;
+            font-family: var(--font-mono);
+            line-height: 1.6;
+        }
+
+        .comp-detail {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            line-height: 1.6;
+        }
+
+        .comp .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            transition: all 0.3s;
+            position: absolute;
+            top: 14px;
+            right: 14px;
+        }
+
+        .comp .led.on {
+            background: var(--accent-green);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+
+        .comp .led.blink {
+            animation: ledBlink 0.6s ease-in-out infinite;
+        }
+
+        @keyframes ledBlink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.3
+            }
+        }
+
+        /* ARROW CONNECTORS */
+        .arrow-down {
+            text-align: center;
+            padding: 2px 0;
+            color: var(--text-dim);
+            font-size: 11px;
+            position: relative;
+        }
+
+        .arrow-down::before {
+            content: '';
+            display: block;
+            width: 1px;
+            height: 18px;
+            background: linear-gradient(to bottom, var(--border-med), var(--text-dim));
+            margin: 0 auto;
+        }
+
+        .arrow-down::after {
+            content: '▼';
+            font-size: 8px;
+            display: block;
+        }
+
+        .arrow-down .arrow-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            margin-top: 2px;
+        }
+
+        /* SECTION DIVIDERS */
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0 8px;
+            padding: 0 8px;
+        }
+
+        .section-divider .line {
+            flex: 1;
+            height: 1px;
+            background: var(--border-dim);
+        }
+
+        .section-divider .label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .label-physical {
+            color: var(--accent-amber);
+        }
+
+        .label-kernel {
+            color: var(--accent-blue);
+        }
+
+        .label-user {
+            color: var(--accent-green);
+        }
+
+        .label-ram {
+            color: var(--accent-purple);
+        }
+
+        /* KERNEL INTERNALS ROW */
+        .kernel-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        @media (max-width: 700px) {
+            .kernel-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .kernel-inner {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            transition: all 0.5s;
+            cursor: pointer;
+        }
+
+        .kernel-inner.lit-blue {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 14px var(--glow-blue);
+        }
+
+        .kernel-inner.lit-cyan {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 14px var(--glow-cyan);
+        }
+
+        .kernel-inner.lit-purple {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 14px var(--glow-purple);
+        }
+
+        .kernel-inner .ki-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .kernel-inner .ki-content {
+            font-size: 10px;
+            font-family: var(--font-mono);
+            color: var(--text-dim);
+            line-height: 1.7;
+        }
+
+        .kernel-inner .ki-content span {
+            color: var(--accent-cyan);
+        }
+
+        /* DATA DISPLAY */
+        .data-display {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.06);
+            border: 1px solid rgba(6, 182, 212, 0.15);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            margin-top: 6px;
+            word-break: break-all;
+            min-height: 20px;
+            transition: all 0.3s;
+        }
+
+        .data-display.empty {
+            color: var(--text-dim);
+            background: transparent;
+            border-color: var(--border-dim);
+        }
+
+        /* LOG PANEL */
+        .log-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius);
+            margin-top: 20px;
+        }
+
+        .log-header {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-dim);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .log-header .lh-title {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .log-header .lh-badge {
+            font-size: 10px;
+            font-family: var(--font-mono);
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .log-body {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 8px 14px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            line-height: 2;
+        }
+
+        .log-body::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .log-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .log-body::-webkit-scrollbar-thumb {
+            background: var(--border-med);
+            border-radius: 2px;
+        }
+
+        .log-line {
+            display: flex;
+            gap: 8px;
+        }
+
+        .log-line .lt {
+            color: var(--text-dim);
+            min-width: 80px;
+        }
+
+        .log-line .lm {
+            color: var(--text-secondary);
+        }
+
+        .log-line .lm.hw {
+            color: var(--accent-amber);
+        }
+
+        .log-line .lm.act {
+            color: var(--accent-blue);
+        }
+
+        .log-line .lm.ok {
+            color: var(--accent-green);
+        }
+
+        .log-line .lm.err {
+            color: var(--accent-red);
+        }
+
+        .log-line .lm.info {
+            color: var(--accent-cyan);
+        }
+
+        /* POPUP MODAL */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-med);
+            border-radius: var(--radius-lg);
+            max-width: 560px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-accent {
+            height: 3px;
+            border-radius: 14px 14px 0 0;
+        }
+
+        .modal-accent.amber {
+            background: linear-gradient(90deg, var(--accent-amber), #d97706);
+        }
+
+        .modal-accent.blue {
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+        }
+
+        .modal-accent.green {
+            background: linear-gradient(90deg, var(--accent-green), #059669);
+        }
+
+        .modal-accent.purple {
+            background: linear-gradient(90deg, var(--accent-purple), var(--accent-pink));
+        }
+
+        .modal-accent.cyan {
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+        }
+
+        .modal-body {
+            padding: 20px 24px 24px;
+        }
+
+        .modal-body h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .modal-body .modal-type {
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .type-hw {
+            color: var(--accent-amber);
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .type-sw {
+            color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .type-app {
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .modal-body p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 10px;
+        }
+
+        .modal-body p b {
+            color: var(--text-primary);
+        }
+
+        .modal-body code {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            background: var(--bg-elevated);
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: var(--accent-cyan);
+        }
+
+        .modal-body .tech-block {
+            background: var(--bg-card);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            margin: 10px 0;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-cyan);
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        .modal-body .fact-row {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 12px;
+            font-size: 12px;
+            margin: 8px 0;
+        }
+
+        .fact-row .fk {
+            color: var(--text-dim);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .fact-row .fv {
+            color: var(--text-secondary);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-dim);
+            color: var(--text-secondary);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        /* STEP COUNTER */
+        .step-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+
+        .step-badge.amber {
+            color: var(--accent-amber);
+            background: rgba(245, 158, 11, 0.12);
+        }
+
+        .step-badge.blue {
+            color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .step-badge.green {
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.12);
+        }
+
+        .step-badge.purple {
+            color: var(--accent-purple);
+            background: rgba(139, 92, 246, 0.12);
+        }
+
+        .step-badge.cyan {
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.12);
+        }
+
+        /* Progress bar */
+        .progress-bar {
+            height: 3px;
+            background: var(--bg-elevated);
+            border-radius: 2px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            border-radius: 2px;
+            transition: width 0.6s ease;
+            width: 0%;
+        }
+
+
+        /* FOOTER STYLES */
+        .footer {
+            margin-top: 60px;
+            padding: 30px 20px;
+            border-top: 1px solid var(--border-dim);
+            text-align: center;
+            position: relative;
+        }
+
+        .footer::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+        }
+
+        .footer-content {
+            font-size: 13px;
+            color: var(--text-dim);
+            letter-spacing: 0.02em;
+            line-height: 1.6;
+        }
+
+        .footer-content .highlight {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .footer-content .brand {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <div class="header">
+            <h1>OS Kernel TCP Simulator</h1>
+            <p>Watch a packet travel from physical wire to application memory — click any component to learn how it
+                works</p>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+        <div class="info-bar" id="info">Click <b>"Send packet" </b>to watch a JSON command travel from the ethernet
+            cable → NIC → RAM → kernel TCP engine → port lookup → socket buffer → Blender. Each component lights up as
+            data passes through. <b>Click any component</b>at any time for a detailed technical popup. </div>
+        <div class="controls"><button id="btn-send" onclick="runJourney()">▶ Send packet</button><button id="btn-step"
+                onclick="nextStep()" disabled>Next step →</button><button class="btn-reset" onclick="resetAll()">↺
+                Reset</button><span style="margin-left:auto;font-size:11px;color:var(--text-dim);align-self:center"
+                id="step-counter">Step 0 / 10</span></div>
+        <div class="diagram-container">
+            <!-- LAYER 1: PHYSICAL HARDWARE -->
+            <div class="layer-section layer-physical">
+                <div class="zone-label zone-physical">Hardware</div>
+                <div class="section-divider">
+                    <div class="line"></div><span class="label label-physical">Physical hardware (Internal &
+                        External)</span>
+                    <div class="line"></div>
+                </div>
+
+                <!-- Ethernet Cable -->
+                <div class="comp" id="c-cable" onclick="showPopup('cable')">
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(245,158,11,0.15);color:var(--accent-amber)">⚡</span>Ethernet cable
+                    </div>
+                    <div class="comp-sub">Copper twisted pair — 8 wires carrying voltage pulses</div>
+                    <div class="comp-detail">Electrical signals: +1V=bit 1, -1V=bit 0, at 1 billion pulses/sec (1 Gbps)
+                    </div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">voltage pulses → NIC pins</span></div>
+
+                <!-- NIC -->
+                <div class="comp" id="c-nic" onclick="showPopup('nic')">
+                    <div class="led" id="nic-led"></div>
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(245,158,11,0.15);color:var(--accent-amber)">◈</span>Network interface
+                        card (NIC)</div>
+                    <div class="comp-sub">Physical chip soldered to motherboard — has its own processor + 128KB buffer
+                    </div>
+                    <div class="comp-detail">Converts analog voltage → digital bits → assembles ethernet frame → CRC-32
+                        error check</div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">DMA write over PCIe bus</span></div>
+
+                <!-- PCIe Bus -->
+                <div class="comp" id="c-bus" onclick="showPopup('bus')">
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(245,158,11,0.15);color:var(--accent-amber)">═</span>PCIe bus + DMA
+                        controller</div>
+                    <div class="comp-sub">Physical copper traces on motherboard — highway between chips</div>
+                    <div class="comp-detail">DMA lets NIC write directly to RAM without interrupting the CPU</div>
+                </div>
+            </div>
+
+            <!-- LAYER 2: SYSTEM RAM -->
+            <div class="layer-section layer-ram">
+                <div class="zone-label zone-ram">RAM</div>
+                <div class="section-divider">
+                    <div class="line"></div><span class="label label-ram">System RAM (Main Memory)</span>
+                    <div class="line"></div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">bytes land at memory address 0xFFFF8800</span></div>
+
+                <!-- NIC Ring Buffer -->
+                <div class="comp" id="c-ringbuf" onclick="showPopup('ringbuf')">
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(139,92,246,0.15);color:var(--accent-purple)">◻</span>NIC ring buffer
+                        <span style="font-size:10px;color:var(--text-dim);font-weight:400">(in RAM)</span>
+                    </div>
+                    <div class="comp-sub">Pre-allocated memory region — the NIC's "inbox"</div>
+                    <div class="data-display empty" id="ringbuf-data">Empty — no packets received</div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">CPU interrupt IRQ → kernel wakes up</span></div>
+            </div>
+
+            <!-- LAYER 3: OS KERNEL -->
+            <div class="layer-section layer-kernel">
+                <div class="zone-label zone-kernel">Kernel</div>
+                <div class="section-divider">
+                    <div class="line"></div><span class="label label-kernel">OS kernel space (System Management)</span>
+                    <div class="line"></div>
+                </div>
+
+                <!-- Kernel Internals -->
+                <div class="comp" id="c-kernel" style="padding:12px">
+                    <div class="comp-title" style="margin-bottom:8px"><span class="icon"
+                            style="background:rgba(59,130,246,0.15);color:var(--accent-blue)">⬡</span>OS kernel — TCP/IP
+                        networking stack</div>
+                    <div class="kernel-row">
+                        <div class="kernel-inner" id="ki-tcp" onclick="showPopup('tcp')">
+                            <div class="ki-title">TCP engine</div>
+                            <div class="ki-content">Verify checksum<br>Check seq number<br>Reorder if needed<br>State:
+                                <span id="tcp-state">idle</span>
+                            </div>
+                        </div>
+                        <div class="kernel-inner" id="ki-port" onclick="showPopup('port')">
+                            <div class="ki-title">Port lookup table</div>
+                            <div class="ki-content"><span>9876</span> → Blender (fd:3)<br><span>443</span> → Chrome
+                                (fd:7)<br><span>22</span> → SSH (fd:9)<br>State: <span id="port-state">ready</span>
+                            </div>
+                        </div>
+                        <div class="kernel-inner" id="ki-socket" onclick="showPopup('socket')">
+                            <div class="ki-title">Socket object (fd:3)</div>
+                            <div class="ki-content">local: <span>127.0.0.1:9876</span><br>remote:
+                                <span>127.0.0.1:49152</span><br>state: <span
+                                    id="sock-state">ESTABLISHED</span><br>buffer: <span id="sock-buf">0 bytes</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">clean payload → socket receive buffer</span></div>
+
+                <!-- Socket Receive Buffer -->
+                <div class="comp" id="c-recvbuf" onclick="showPopup('recvbuf')">
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(59,130,246,0.15);color:var(--accent-blue)">▤</span>Socket receive
+                        buffer <span
+                            style="font-size:10px;color:var(--text-dim);font-weight:400">(kernel-managed)</span></div>
+                    <div class="comp-sub">Clean data (TCP headers stripped) waits here for the application to read</div>
+                    <div class="data-display empty" id="recvbuf-data">Empty — waiting for payload...</div>
+                </div>
+            </div>
+
+            <!-- LAYER 4: USER SPACE -->
+            <div class="layer-section layer-user">
+                <div class="zone-label zone-user">User</div>
+                <div class="section-divider">
+                    <div class="line"></div><span class="label label-user">User space (Application Logic)</span>
+                    <div class="line"></div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">recv() syscall — kernel copies to app memory</span>
+                </div>
+
+                <!-- Blender Addon -->
+                <div class="comp" id="c-app" onclick="showPopup('app')">
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(16,185,129,0.15);color:var(--accent-green)">▶</span>Blender addon
+                        (Python process)</div>
+                    <div class="comp-sub" id="app-status">blocked on recv(fd:3) — sleeping, waiting for kernel to wake
+                        it</div>
+                    <div class="data-display empty" id="app-data">No data received yet</div>
+                </div>
+
+                <div class="arrow-down"><span class="arrow-label">json.loads() → bpy API call</span></div>
+
+                <!-- Blender Engine -->
+                <div class="comp" id="c-bpy" onclick="showPopup('bpy')">
+                    <div class="comp-title"><span class="icon"
+                            style="background:rgba(16,185,129,0.15);color:var(--accent-green)">⬢</span>Blender C++
+                        engine (bpy)</div>
+                    <div class="comp-sub" id="bpy-status">Idle — waiting for Python commands</div>
+                </div>
+            </div>
+        </div><!-- end diagram-container --><!-- KERNEL LOG -->
+        <div class="log-panel">
+            <div class="log-header"><span class="lh-title">Kernel event log</span><span class="lh-badge"
+                    id="log-count">0 events</span></div>
+            <div class="log-body" id="log"></div>
+        </div>
+        <footer class="footer">
+            <div class="footer-content">
+                ideated, designed and developed by <span class="highlight">CharanTheAiGuy</span> from &copy; <span
+                    class="brand">nDimensions.AI</span>
+            </div>
+        </footer>
+    </div><!-- end app --><!-- POPUP MODAL -->
+    <div class="modal-overlay" id="modal" onclick="if(event.target===this)closePopup()">
+        <div class="modal">
+            <div class="modal-accent" id="modal-accent"></div><button class="modal-close"
+                onclick="closePopup()">✕</button>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+    <script> // ============ POPUP DATA ============
+
+        const popups = {
+            cable: {
+                accent: 'amber',
+                type: 'hw', typeLabel: 'Physical hardware',
+                title: 'Ethernet cable',
+                html: ` <p><b>What it physically is:</b> A cable containing 4 twisted pairs of copper wires (8 wires total). You can hold it. It has an RJ-45 connector on each end that clicks into your computer and router.</p> <p><b>How data travels through it:</b> Electrical voltage pulses travel along the copper at about 200, 000 km/s (~70% speed of light). A positive voltage (+1V) represents a binary 1, and a negative voltage (-1V) represents a binary 0. At Gigabit speed, the voltages switch <b>1 billion times per second</b>.</p> <p><b>Why twisted pairs?</b> The wires are twisted around each other to cancel out electromagnetic interference from nearby electronics. Each pair carries a differential signal — the receiver looks at the difference between the two wires, which eliminates noise that affects both wires equally.</p> <div class="tech-block" > Physical medium: Copper (Cat 5e/6/6a)<br> Signal type: Differential voltage (±1V)<br> Speed: 1 Gbps (1000BASE-T) or 100 Mbps (100BASE-TX)<br> Max length: 100 meters before signal degrades<br> Encoding: PAM-5 (5-level pulse amplitude modulation)<br> Connector: RJ-45 (8-pin modular) </div> <p><b>For localhost (our Blender case):</b> When both programs are on the same PC, no physical cable is used. The OS kernel <b>short-circuits</b> the loopback interface — packets go from kernel memory directly back to kernel memory. The electrical layer is skipped entirely. But the TCP/IP processing still happens identically.</p> `
+            }
+
+            ,
+            nic: {
+                accent: 'amber',
+                type: 'hw', typeLabel: 'Physical hardware',
+                title: 'Network interface card (NIC)',
+                html: ` <p><b>What it physically is:</b> A chip (or set of chips) soldered directly onto your motherboard. On some PCs it's a separate card plugged into a PCIe slot. It has its own tiny processor (a microcontroller), its own small RAM buffer (~128KB), and the physical connector where the ethernet cable plugs in.</p>
+ <p><b>What it does step by step:</b></p> <p>1. <b>Analog → Digital:</b> The NIC's PHY (physical layer) chip detects voltage changes on the wire and converts them into raw digital bits (1s and 0s).</p>
+ <p>2. <b>Frame assembly:</b> The bits are grouped into an <b>Ethernet frame</b> — a structured packet with: destination MAC address (6 bytes), source MAC address (6 bytes), type field (2 bytes), payload (your actual data, 46–1500 bytes), and CRC checksum (4 bytes).</p> <p>3. <b>CRC check:</b> The NIC runs a CRC-32 algorithm on the entire frame to verify nothing was corrupted during transmission. If the CRC fails, the frame is silently dropped.</p> <p>4. <b>MAC filter:</b> The NIC checks if the destination MAC address matches its own. If not, it ignores the frame (unless in promiscuous mode).</p> <p>5. <b>DMA write:</b> The NIC strips the Ethernet header, and uses DMA to write the remaining IP packet directly into RAM.</p> <div class="tech-block" > Manufacturer examples: Intel I225-V, Realtek RTL8125<br> Own processor: ARM or MIPS microcontroller<br> Own buffer: 128KB–256KB SRAM<br> Bus interface: PCIe x1 (2.5 GT/s)<br> MAC address: 48-bit unique hardware ID (e.g., AA:BB:CC:DD:EE:FF)<br> Offloading: Can compute TCP checksums in hardware </div> <p><b>The LED</b> you see blinking on the ethernet port is controlled by the NIC chip — it blinks when frames are being received or sent. Green=link active, amber=activity.</p> `
+            }
+
+            ,
+            bus: {
+                accent: 'amber',
+                type: 'hw', typeLabel: 'Physical hardware',
+                title: 'PCIe bus + DMA',
+                html: ` <p><b>PCIe bus — what it physically is:</b> Thin copper traces (pathways) printed on your motherboard. They connect every component — CPU, RAM, NIC, GPU, SSD — like highways connecting cities. Data travels as electrical signals along these traces at ~8 GT/s (gigatransfers per second) for PCIe 3.0.</p> <p><b>DMA (Direct Memory Access) — what it is:</b> A capability that lets devices like the NIC write data <b>directly into RAM</b> without going through the CPU. Without DMA, the CPU would have to personally read each byte from the NIC and write it to RAM — wasting precious CPU cycles. With DMA, the NIC says "I'm writing 144 bytes to RAM address 0xFFFF8800" and the memory controller handles it while the CPU keeps doing other work.</p> <p><b>How DMA works step by step:</b></p> <p>1. At boot, the OS kernel allocates a chunk of RAM (the "ring buffer") and tells the NIC: "write incoming packets to this address range." </p> <p>2. When a packet arrives, the NIC initiates a DMA transfer — it puts the data on the PCIe bus with the target RAM address.</p> <p>3. The memory controller (part of the CPU package) receives this and writes the data to the correct RAM location.</p> <p>4. The NIC then sends a <b>hardware interrupt</b> (an electrical signal on a dedicated pin) to the CPU saying "new data is ready at that address." </p> <div class="tech-block" > PCIe 3.0 x1 bandwidth: 985 MB/s per lane<br> DMA transfer: NIC → memory controller → RAM<br> Ring buffer: typically 256–4096 slots, each holds one packet<br> Interrupt: MSI-X (Message Signaled Interrupt) via PCIe<br> CPU involvement: ZERO during the actual data transfer </div> `
+            }
+
+            ,
+            ringbuf: {
+                accent: 'purple',
+                type: 'sw', typeLabel: 'Software (data in physical RAM)',
+                title: 'NIC ring buffer',
+                html: ` <p><b>What it is:</b> A pre-allocated region of <b>physical RAM</b> that acts as the NIC's "inbox." The RAM chip is physical — you can touch it. But the ring buffer is a <b>software concept</b> — it' s just a section of RAM that the kernel and NIC agreed to use in a specific way.</p> <p><b>Why "ring" ?</b> It's organized as a circular array of slots. Slot 0, 1, 2... 255, then back to 0. The NIC writes to the next available slot; the kernel reads from the oldest unread slot. They chase each other around the ring. If the kernel falls behind, packets get dropped (the NIC overwrites the oldest unread slot).</p>
+ <p><b>What lives in each slot:</b> One raw IP packet — including the IP header, TCP header, and payload data. The Ethernet header was already stripped by the NIC.</p> <div class="tech-block" > Location: Physical RAM (e.g., address 0xFFFF8800–0xFFFF9FFF)<br> Size: typically 256 or 512 slots × ~2KB each=512KB–1MB<br> Data format: Raw IP packets (no ethernet header)<br> Written by: NIC via DMA (no CPU involved)<br> Read by: Kernel interrupt handler (runs on CPU)<br> Ownership: Allocated by kernel at boot, shared with NIC </div> <p><b>Key insight:</b> The data is sitting in RAM <b>before the CPU even knows it's there</b>. The CPU only finds out when the NIC fires a hardware interrupt. This is the beauty of DMA — the heavy lifting (copying data) happens without the CPU.</p>
+ `
+            }
+
+            ,
+            tcp: {
+                accent: 'blue',
+                type: 'sw', typeLabel: 'Software (code in OS kernel)',
+                title: 'TCP engine',
+                html: ` <p><b>What it is:</b> A large piece of C code compiled into the OS kernel. It's <b>not hardware</b> — there is no TCP chip. It runs on the CPU whenever the kernel processes a network packet. In Linux, this code is in <code>net/ipv4/tcp_input.c</code> (about 6,000 lines of C).</p>
+ <p><b>What it does when a packet arrives:</b></p> <p>1. <b>Parse IP header:</b> Extract source IP, destination IP, protocol type (TCP=6).</p> <p>2. <b>Parse TCP header:</b> Extract source port, destination port, sequence number, acknowledgment number, flags (SYN/ACK/FIN/RST), window size, and checksum.</p> <p>3. <b>Verify checksum:</b> Compute a checksum over the entire TCP segment (header + payload) and compare it to the one in the header. If mismatch → drop the packet (it was corrupted).</p> <p>4. <b>Check sequence number:</b> Is this the next expected byte? If seq=1001 and we expected 1001 → in order. If seq=2001 and we expected 1001 → out of order, buffer it for later. If seq=501 and we expected 1001 → duplicate, discard.</p> <p>5. <b>Update state machine:</b> TCP connections go through states: LISTEN → SYN_RECV → ESTABLISHED → FIN_WAIT → CLOSED. The engine updates the state based on flags.</p> <p>6. <b>Generate ACK:</b> Compose a response packet with the acknowledgment number=next expected seq. "I received everything up to byte 1093." </p> <div class="tech-block" > TCP header format (20+ bytes):<br> ┌──────────────┬──────────────┐<br> │ src port (16)│ dst port (16)│<br> ├──────────────┴──────────────┤<br> │ sequence number (32 bits) │<br> ├─────────────────────────────┤<br> │ ack number (32 bits) │<br> ├──────┬──────┬───────────────┤<br> │offset│flags │ window (16) │<br> ├──────┴──────┼───────────────┤<br> │checksum (16)│ urgent (16) │<br> └─────────────┴───────────────┘ </div> <p><b>Exists in:</b> RAM (as compiled machine code) + CPU (when executing). The TCP engine is just a function that the CPU runs — it reads data from RAM, processes it, and writes results back to RAM.</p> `
+            }
+
+            ,
+            port: {
+                accent: 'cyan',
+                type: 'sw', typeLabel: 'Software (data structure in RAM)',
+                title: 'Port lookup table',
+                html: ` <p><b>What it is:</b> An array (or hash table) stored in <b>RAM</b>. It maps port numbers (0–65535) to socket file descriptors. There is <b>no physical port</b> anywhere in your computer. A port is just a 16-bit number (2 bytes) in the TCP header.</p> <p><b>How the kernel uses it:</b> When a TCP packet arrives with destination port 9876, the kernel looks up <code>port_table[9876]</code> and finds <code>fd:3</code> — which is the Blender addon's socket. Now the kernel knows where to deliver the data.</p>
+ <p><b>How ports get registered:</b> When a program calls <code>bind(fd, port=9876)</code>, the kernel adds an entry to this table. When the program closes the socket, the entry is removed. If another program tries to bind to an already-used port, the kernel returns error: <code>EADDRINUSE</code> ("Address already in use").</p> <div class="tech-block" > Data structure: Hash table in kernel memory<br> Key: 16-bit port number (0–65535)<br> Value: pointer to socket structure<br> <br> Current entries:<br> port 9876 → fd:3 (Blender addon, pid:4521)<br> port 443 → fd:7 (Chrome, pid:1208)<br> port 22 → fd:9 (SSH server, pid:892) </div> <p><b>Well-known ports:</b> Ports 0–1023 are "privileged" — only root/admin can bind to them. Ports like 80 (HTTP), 443 (HTTPS), 22 (SSH), 25 (SMTP) are standardized. Ports 1024–65535 are available to any program. Port 9876 is in this range — that's why Blender can use it without admin rights.</p>
+ `
+            }
+
+            ,
+            socket: {
+
+                accent: 'purple',
+                type: 'sw',
+                typeLabel: 'Software (data structure in RAM)',
+                title: 'Socket object',
+                html: ` <p><b>What it is:</b>A <b>data structure</b>(a struct in C) that the kernel allocates in RAM. It contains everything the kernel needs to manage one network connection. There is nothing physical about a socket — it's organized bytes in RAM.</p>
+ <p><b>What's inside the socket struct:</b></p>
+ <div class="tech-block">struct socket {
+            <br>&nbsp;
+            &nbsp;
+            int fd; // file descriptor (3)<br>
+            &nbsp;
+            &nbsp;
+            int state; // LISTEN, ESTABLISHED, CLOSED...<br>
+            &nbsp;
+            &nbsp;
+            uint32_t local_ip; // 127.0.0.1<br>
+            &nbsp;
+            &nbsp;
+            uint16_t local_port; // 9876<br>
+            &nbsp;
+            &nbsp;
+            uint32_t remote_ip; // 127.0.0.1<br>
+            &nbsp;
+            &nbsp;
+            uint16_t remote_port; // 49152<br>
+            &nbsp;
+            &nbsp;
+            uint32_t seq_num; // next seq to send<br>
+            &nbsp;
+            &nbsp;
+            uint32_t ack_num; // next seq expected<br>
+            &nbsp;
+            &nbsp;
+            char recv_buffer[65536]; // 64KB receive buffer<br>
+            &nbsp;
+            &nbsp;
+            char send_buffer[65536]; // 64KB send buffer<br>
+            &nbsp;
+            &nbsp;
+            int recv_buf_len; // bytes waiting to be read<br>
+            &nbsp;
+            &nbsp; // ... timers, window size, congestion control...<br>
+        }
+
+        ;
+        </div><p><b>File descriptor (fd):</b>This is just an integer — a "ticket number" the kernel gives to the program. When the Blender addon calls <code>recv(3, ...)</code>,
+        the kernel looks up "what is fd:3?" → finds this socket struct → reads from its recv_buffer. The program never touches the socket directly — it only knows the fd number.</p><p><b>Lifecycle:</b>Created by <code>socket()</code>syscall → bound to port by <code>bind()</code>→ starts listening with <code>listen()</code>→ connection accepted with <code>accept()</code>(which creates a NEW socket for that connection) → data exchanged → closed with <code>close()</code>→ kernel frees the RAM.</p><p><b>Memory size:</b>Each socket uses roughly 256 bytes for metadata+128KB for send/recv buffers=~130KB of RAM per connection.</p>`
+            }
+
+            ,
+            recvbuf: {
+                accent: 'blue',
+                type: 'sw', typeLabel: 'Software (buffer in RAM)',
+                title: 'Socket receive buffer',
+                html: ` <p><b>What it is:</b> A chunk of RAM (typically 64KB) inside the socket data structure. After the TCP engine verifies a packet, it strips all headers (Ethernet, IP, TCP) and copies <b>only the clean payload</b> (your actual JSON data) into this buffer.</p> <p><b>Why it exists:</b> The application (Blender addon) might be busy doing something else when data arrives. The kernel can't just throw the data away — so it stores it in this buffer until the application calls <code>recv()</code> to read it. Think of it like a mailbox: the postal service delivers mail even when you' re not home.</p> <p><b>How the application reads it:</b> The Blender addon calls <code>recv(fd=3, buffer, size)</code>. This is a <b>syscall</b> — the CPU switches from user mode to kernel mode. The kernel copies bytes from the socket's recv_buffer into the application' s own memory space, then switches back to user mode. The application now has the data.</p> <div class="tech-block" > Default size: 64KB (configurable up to ~16MB)<br> Managed by: Kernel (application cannot access directly)<br> Write: Kernel TCP engine writes clean payload here<br> Read: Application calls recv() → kernel copies to app memory<br> Overflow: If buffer is full, TCP flow control kicks in —<br> kernel tells sender to SLOW DOWN (reduces TCP window size) </div> <p><b>This is where TCP flow control happens:</b> If this buffer is nearly full (the app isn't reading fast enough), the kernel reduces the "window size" it advertises in ACK packets. The sender sees the small window and slows down its transmission rate. This prevents the sender from overwhelming the receiver.</p>
+ `
+            }
+
+            ,
+            app: {
+                accent: 'green',
+                type: 'app', typeLabel: 'Application (user space)',
+                title: 'Blender addon (Python process)',
+                html: ` <p><b>What it is:</b> A Python script running inside Blender's embedded Python interpreter. It lives in "user space" — a protected zone where programs run <b>without</b> direct access to hardware. The addon cannot touch RAM addresses, read from the NIC, or talk to hardware. It can only ask the kernel for help via <b>syscalls</b>.</p>
+ <p><b>The recv() blocking call:</b> When the addon calls <code>data=socket.recv(4096)</code>, here's what actually happens:</p>
+ <p>1. Python calls C library's <code>recv()</code> function</p>
+ <p>2. The C library executes a <code>syscall</code> instruction — CPU switches from user mode to kernel mode</p> <p>3. Kernel checks socket fd:3's receive buffer — is there data?</p>
+ <p>4. <b>If empty:</b> Kernel puts the Blender addon process to SLEEP (marks it as "blocked"). The CPU goes to work on other processes. The addon uses ZERO CPU while waiting.</p> <p>5. <b>When data arrives:</b> Kernel writes payload to recv buffer, then WAKES UP the Blender addon process</p> <p>6. Kernel copies data from socket recv buffer → addon's memory space</p>
+ <p>7. CPU switches back to user mode, <code>recv()</code> returns with the data</p> <div class="tech-block" > Process: pid:4521 (blender --python addon.py)<br> Memory space: isolated virtual address space (~4GB)<br> Socket access: only via fd:3 (file descriptor)<br> Blocking: sleeping on recv() uses 0% CPU<br> Data flow: recv() → json.loads() → command dispatch → bpy call </div> <p><b>Key security concept:</b> The addon runs in user space — it CANNOT read another program's memory, access hardware directly, or modify kernel data. Everything goes through syscalls. This is why your computer doesn' t crash when one program has a bug — the kernel protects everything.</p> `
+            }
+
+            ,
+            bpy: {
+                accent: 'green',
+                type: 'app', typeLabel: 'Application (user space)',
+                title: 'Blender C++ engine (bpy)',
+                html: ` <p><b>What it is:</b> Blender's core 3D engine, written in C and C++. When the Python addon calls <code>bpy.ops.mesh.primitive_cube_add(size=2)</code>, Python calls into C++ code via Blender' s Python binding layer.</p> <p><b>What happens when a cube is created:</b></p> <p>1. <b>Allocate mesh data:</b> C++ code allocates memory for 8 vertices (x, y, z coordinates), 12 edges, and 6 faces. Each vertex is 3 floats=12 bytes. Total mesh: ~320 bytes.</p> <p>2. <b>Create object:</b> A Blender "Object" is created that references this mesh. The object stores transform (location, rotation, scale), parent relationships, and material slots.</p> <p>3. <b>Add to scene:</b> The object is linked to the current scene's collection — this is Blender' s scene graph (a tree structure tracking all objects).</p> <p>4. <b>Notify viewport:</b> Blender's event system flags the viewport for redraw. The GPU receives updated vertex data and renders the cube on your screen.</p>
+ <div class="tech-block" > Cube mesh data:<br> 8 vertices × 12 bytes (3×float32)=96 bytes<br> 12 edges × 8 bytes (2×int32)=96 bytes<br> 6 faces × 16 bytes (4×int32)=96 bytes<br> + normals, UVs, object metadata ≈ 320 bytes total<br> <br> Call chain:<br> Python: bpy.ops.mesh.primitive_cube_add()<br> → C: WM_operator_call() [window manager]<br> → C: MESH_OT_primitive_cube_add() [mesh operator]<br> → C: BKE_mesh_new_nomain() [kernel mesh alloc]<br> → C: DEG_tag_update() [dependency graph notify]<br> → GPU: draw call for new geometry </div> <p><b>Everything happens in the same process:</b> Python, C++, and GPU calls all happen within the single Blender process. The bpy binding layer translates Python objects to C structs. When the function returns, Python gets back a reference to the newly created Blender object.</p> `
+            }
+        }
+
+            ;
+
+        // ============ POPUP FUNCTIONS ============
+        function showPopup(key) {
+            const d = popups[key];
+            if (!d) return;
+            const overlay = document.getElementById('modal');
+            const accent = document.getElementById('modal-accent');
+            const body = document.getElementById('modal-body');
+            accent.className = 'modal-accent ' + d.accent;
+            const typeClass = d.type === 'hw' ? 'type-hw' : d.type === 'sw' ? 'type-sw' : 'type-app';
+
+            body.innerHTML = `
+            <span class="modal-type ${typeClass}">${d.typeLabel}</span>
+            <h2>${d.title}</h2>
+            ${d.html}
+        `;
+            overlay.classList.add('show');
+        }
+
+        function closePopup() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closePopup();
+        });
+
+        // ============ LOG ============
+        let logLines = [];
+
+        function log(msg, cls = 'act') {
+            const t = new Date().toLocaleTimeString('en', {
+                hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+
+            logLines.push({
+                t, msg, cls
+            });
+            const el = document.getElementById('log');
+
+            el.innerHTML = logLines.map(l => `<div class="log-line" ><span class="lt" >$ {
+        l.t
+    }
+
+    </span><span class="lm ${l.cls}" >$ {
+        l.msg
+    }
+
+    </span></div>`).join('');
+            el.scrollTop = el.scrollHeight;
+            document.getElementById('log-count').textContent = logLines.length + ' events';
+        }
+
+        // ============ STEP ENGINE ============
+        let currentStep = 0;
+        let stepping = false;
+
+        function setInfo(html) {
+            document.getElementById('info').innerHTML = html;
+        }
+
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        function light(id, cls, dur) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.add(cls);
+            if (dur) setTimeout(() => el.classList.remove(cls), dur);
+        }
+
+        function unlight(id, cls) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove(cls);
+        }
+
+        const steps = [ // Step 1: Electrical signal on cable
+
+            async () => {
+                light('c-cable', 'lit-amber');
+                log('⚡ Electrical voltage pulses detected on copper twisted pair', 'hw');
+                log('Signal encoding: PAM-5, differential ±1V, 1 Gbps line rate', 'hw');
+                setInfo(`<span class="step-badge amber" >Step 1 / 10</span><br><b>Electrical signals on the wire.</b> The MCP server sent data. The sending computer's OS already packaged it through TCP/IP and sent voltage pulses down the ethernet cable. These are <b>real physical electrical signals</b> — positive and negative voltages switching billions of times per second. Click the <b>Ethernet cable</b> box for details.`);
+                showPopup('cable');
+                await sleep(1500);
+                unlight('c-cable', 'lit-amber');
+            }
+
+            ,
+            // Step 2: NIC
+            async () => {
+                light('c-nic', 'lit-amber');
+                const led = document.getElementById('nic-led');
+                led.classList.add('on', 'blink');
+                log('NIC PHY: analog-to-digital conversion — voltage → bits', 'hw');
+                log('NIC MAC: assembling ethernet frame (14B header + 144B payload + 4B CRC)', 'hw');
+                await sleep(600);
+                log('NIC: CRC-32 computed = 0xA3F72B01, matches frame CRC ✓', 'ok');
+                log('NIC: destination MAC matches — frame accepted', 'ok');
+                log('NIC: stripping 14-byte ethernet header → raw IP packet (144 bytes)', 'hw');
+                setInfo(`<span class="step-badge amber" >Step 2 / 10</span><br><b>NIC converts signals to digital.</b> The physical NIC chip detected the voltage changes, converted them to bits, assembled an ethernet frame, verified the CRC-32 checksum, and stripped the ethernet header. The LED is blinking. Click the <b>NIC</b> box for the full hardware breakdown.`);
+                showPopup('nic');
+                await sleep(1500);
+                led.classList.remove('blink');
+            }
+
+            ,
+            // Step 3: PCIe / DMA
+            async () => {
+                light('c-bus', 'lit-amber');
+                log('NIC → PCIe bus: initiating DMA write (144 bytes → RAM 0xFFFF8800)', 'hw');
+                log('Memory controller: writing to DIMM slot 0, bank 2, row 0x1A3F', 'hw');
+                await sleep(600);
+                log('DMA transfer complete — 0 CPU cycles used', 'ok');
+                log('NIC → CPU: firing MSI-X interrupt (vector 47)', 'hw');
+                setInfo(`<span class="step-badge amber" >Step 3 / 10</span><br><b>DMA writes directly to RAM.</b> The NIC used DMA (Direct Memory Access) to copy bytes through the PCIe bus directly into RAM — the CPU didn't lift a finger. After the copy, the NIC fires a hardware interrupt to alert the CPU. Click the <b>PCIe bus</b> box for details.`);
+                showPopup('bus');
+                await sleep(1500);
+                unlight('c-bus', 'lit-amber');
+                document.getElementById('nic-led').classList.remove('on');
+            }
+
+            ,
+            // Step 4: Ring buffer
+            async () => {
+                light('c-ringbuf', 'lit-purple');
+                const rd = document.getElementById('ringbuf-data');
+                rd.classList.remove('empty');
+                rd.textContent = '45 00 00 90 1A 2B 00 00 40 06 B7 12 7F 00 00 01 7F 00 00 01 C0 00 26 94 00 00 03 E9 ... [144 bytes raw IP packet]';
+                log('RAM: 144 bytes landed in ring buffer slot 7 at address 0xFFFF8800', 'ok');
+                log('CPU: interrupt handler invoked — reading ring buffer slot 7', 'act');
+                setInfo(`<span class="step-badge purple" >Step 4 / 10</span><br><b>Raw bytes in ring buffer.</b> The raw IP packet bytes are now sitting in RAM. The CPU was interrupted and is now reading them. Notice the hex bytes — this is what the data actually looks like in RAM. The CPU had no idea this data existed until the interrupt. Click the <b>ring buffer</b> box for details.`);
+                showPopup('ringbuf');
+                await sleep(1500);
+            }
+
+            ,
+            // Step 5: TCP engine
+            async () => {
+                light('ki-tcp', 'lit-blue');
+                unlight('c-ringbuf', 'lit-purple');
+                document.getElementById('tcp-state').textContent = 'processing...';
+                log('KERNEL IP: parsing header → src=127.0.0.1 dst=127.0.0.1 proto=6 (TCP)', 'act');
+                log('KERNEL TCP: parsing header → src_port=49152 dst_port=9876 seq=1001 flags=ACK+PSH', 'act');
+                await sleep(500);
+                log('KERNEL TCP: computing checksum over 92-byte payload...', 'act');
+                log('KERNEL TCP: checksum 0xA3F7 ✓ — data is not corrupted', 'ok');
+                log('KERNEL TCP: seq=1001 matches next expected — packet in order ✓', 'ok');
+                document.getElementById('tcp-state').textContent = 'verified ✓';
+                setInfo(`<span class="step-badge blue" >Step 5 / 10</span><br><b>TCP engine verifies the packet.</b> The kernel's TCP code (running on the CPU) parsed the IP header, then the TCP header. It verified the checksum (no corruption) and confirmed the sequence number is correct (no missing packets). Click the <b>TCP engine</b> box to see the TCP header structure.`);
+                showPopup('tcp');
+                await sleep(1500);
+            }
+
+            ,
+            // Step 6: Port lookup
+            async () => {
+                light('ki-port', 'lit-cyan');
+                unlight('ki-tcp', 'lit-blue');
+                document.getElementById('port-state').textContent = 'lookup...';
+                log('KERNEL: looking up destination port 9876 in port table', 'act');
+                await sleep(400);
+                log('KERNEL: port_table[9876] → fd:3, pid:4521 (Blender addon) ✓', 'ok');
+                document.getElementById('port-state').textContent = 'found: fd:3';
+                setInfo(`<span class="step-badge cyan" >Step 6 / 10</span><br><b>Port table lookup.</b> The kernel read "destination port: 9876" from the TCP header and looked it up in a hash table in RAM. Result: file descriptor 3, which belongs to the Blender addon process. Now the kernel knows which socket to deliver this data to. Click the <b>Port table</b> box for details.`);
+                showPopup('port');
+                await sleep(1500);
+                unlight('ki-port', 'lit-cyan');
+            }
+
+            ,
+            // Step 7: Socket object
+            async () => {
+                light('ki-socket', 'lit-purple');
+                document.getElementById('sock-state').textContent = 'receiving';
+                log('KERNEL: found socket struct at 0xFFFF9200 — state=ESTABLISHED', 'act');
+                log('KERNEL: stripping IP header (20B) + TCP header (32B) → 92B payload', 'act');
+                log('KERNEL: writing 92 bytes to socket fd:3 recv_buffer', 'ok');
+                document.getElementById('sock-buf').textContent = '92 bytes';
+                setInfo(`<span class="step-badge purple" >Step 7 / 10</span><br><b>Socket object receives clean data.</b> The kernel found the socket data structure in RAM, stripped all network headers (IP + TCP=52 bytes of overhead), and copied just the clean payload (92 bytes of JSON) into the socket's receive buffer. Click the <b>Socket object</b> box to see the struct layout.`);
+                showPopup('socket');
+                await sleep(1500);
+                unlight('ki-socket', 'lit-purple');
+                document.getElementById('sock-state').textContent = 'ESTABLISHED';
+            }
+
+            ,
+            // Step 8: Receive buffer + ACK
+            async () => {
+                light('c-recvbuf', 'lit-blue');
+                const rd = document.getElementById('recvbuf-data');
+                rd.classList.remove('empty');
+                rd.textContent = '{"type":"create_object","params":{"shape":"cube","size":2}}';
+                log('KERNEL: payload written to recv_buffer — 92 / 65536 bytes used', 'ok');
+                log('KERNEL: composing ACK → seq=5001, ack=1093, window=64444', 'act');
+                log('KERNEL: ACK sent back to client ("I received your 92 bytes")', 'ok');
+                log('KERNEL: waking up process pid:4521 (was sleeping on recv())', 'act');
+                setInfo(`<span class="step-badge blue" >Step 8 / 10</span><br><b>Data in receive buffer, ACK sent.</b> The clean JSON now sits in the socket's receive buffer. The kernel sent an ACK packet back ("I got 92 bytes") and woke up the Blender addon process, which was sleeping waiting for data. Click the <b>Socket receive buffer</b> box for details on flow control.`);
+                showPopup('recvbuf');
+                await sleep(1500);
+                unlight('c-recvbuf', 'lit-blue');
+                // Clean up ring buffer
+                const rb = document.getElementById('ringbuf-data');
+                rb.classList.add('empty');
+                rb.textContent = 'Slot 7 freed — ready for next packet';
+            }
+
+            ,
+            // Step 9: Application reads
+            async () => {
+                light('c-app', 'lit-green');
+                document.getElementById('app-status').textContent = 'recv() returned 92 bytes — parsing JSON...';
+                const ad = document.getElementById('app-data');
+                ad.classList.remove('empty');
+                ad.textContent = '{"type":"create_object","params":{"shape":"cube","size":2}}';
+                log('APP: recv(fd:3) syscall returned — 92 bytes copied to app memory', 'ok');
+                log('APP: json.loads() → dict with type="create_object"', 'ok');
+                await sleep(500);
+                log('APP: dispatching command → calling bpy.ops.mesh.primitive_cube_add(size=2)', 'act');
+                document.getElementById('app-status').textContent = 'Command parsed: create_object → cube, size=2 → calling bpy...';
+                // Clear recv buffer
+                document.getElementById('recvbuf-data').classList.add('empty');
+                document.getElementById('recvbuf-data').textContent = 'Empty — application read all data';
+                document.getElementById('sock-buf').textContent = '0 bytes';
+                setInfo(`<span class="step-badge green" >Step 9 / 10</span><br><b>Blender addon reads the data.</b> The process woke up, <code>recv()</code> returned 92 bytes. The kernel copied the data from its buffer into the application's own memory space. Python' s <code>json.loads()</code> parsed it into a dictionary. Now it calls <code>bpy.ops.mesh.primitive_cube_add(size=2)</code>. Click the <b>Blender addon</b> box.`);
+                showPopup('app');
+                await sleep(1500);
+                unlight('c-app', 'lit-green');
+            }
+
+            ,
+            // Step 10: bpy executes
+            async () => {
+                light('c-bpy', 'lit-green');
+                log('BPY: MESH_OT_primitive_cube_add() called', 'act');
+                log('BPY: allocating mesh — 8 verts (96B), 12 edges (96B), 6 faces (96B)', 'ok');
+                await sleep(400);
+                log('BPY: object "Cube" added to scene collection', 'ok');
+                log('BPY: DEG_tag_update() — viewport flagged for redraw', 'ok');
+                log('BPY: GPU draw call issued — cube rendered on screen ✓', 'ok');
+                document.getElementById('bpy-status').textContent = '✓ Cube created — 8 vertices, 12 edges, 6 faces — visible in viewport';
+                setInfo(`<span class="step-badge green" >Step 10 / 10</span><br><b>Cube created !</b> The entire journey is complete. From electrical voltage pulses on copper → NIC chip → DMA → RAM → kernel TCP verification → port lookup → socket buffer → Python recv() → json parse → bpy C++ engine → GPU draw call → cube on screen. Click the <b>Blender engine</b> box for the C++ call chain.`);
+                showPopup('bpy');
+                await sleep(1500);
+            }
+
+        ];
+
+        function updateStepCounter() {
+            document.getElementById('step-counter').textContent = `Step ${currentStep} / ${steps.length}`;
+            document.getElementById('progress').style.width = (currentStep / steps.length * 100) + '%';
+        }
+
+        async function nextStep() {
+            if (stepping || currentStep >= steps.length) return;
+            stepping = true;
+            document.getElementById('btn-step').disabled = true;
+            closePopup();
+            currentStep++;
+            updateStepCounter();
+            await steps[currentStep - 1]();
+            stepping = false;
+
+            if (currentStep < steps.length) {
+                document.getElementById('btn-step').disabled = false;
+            }
+
+            else {
+                document.getElementById('btn-step').disabled = true;
+            }
+        }
+
+        async function runJourney() {
+            if (stepping) return;
+            document.getElementById('btn-send').disabled = true;
+            document.getElementById('btn-step').disabled = false;
+            document.getElementById('btn-send').style.display = 'none';
+            setInfo(`<span class="step-badge blue" >Ready</span><br>Click <b>"Next step →" </b> to advance through each stage of the packet's journey. A popup will explain each component in detail. Take your time — click any component box at any time to re-read its explanation.`);
+
+        }
+
+        function resetAll() {
+            currentStep = 0;
+            stepping = false;
+            logLines = [];
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('log-count').textContent = '0 events';
+            updateStepCounter();
+
+            // Reset all visual states
+            ['c-cable', 'c-nic', 'c-bus', 'c-ringbuf', 'c-recvbuf', 'c-app', 'c-bpy'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('lit-amber', 'lit-blue', 'lit-green', 'lit-purple', 'lit-cyan');
+            });
+
+            ['ki-tcp', 'ki-port', 'ki-socket'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('lit-blue', 'lit-cyan', 'lit-purple');
+            });
+
+            document.getElementById('nic-led').classList.remove('on', 'blink');
+            document.getElementById('tcp-state').textContent = 'idle';
+            document.getElementById('port-state').textContent = 'ready';
+            document.getElementById('sock-state').textContent = 'ESTABLISHED';
+            document.getElementById('sock-buf').textContent = '0 bytes';
+            document.getElementById('app-status').textContent = 'blocked on recv(fd:3) — sleeping, waiting for kernel to wake it';
+            document.getElementById('bpy-status').textContent = 'Idle — waiting for Python commands';
+
+            const rd = document.getElementById('ringbuf-data');
+            rd.className = 'data-display empty';
+            rd.textContent = 'Empty — no packets received';
+
+            const rb = document.getElementById('recvbuf-data');
+            rb.className = 'data-display empty';
+            rb.textContent = 'Empty — waiting for payload...';
+
+            const ad = document.getElementById('app-data');
+            ad.className = 'data-display empty';
+            ad.textContent = 'No data received yet';
+
+            document.getElementById('btn-send').disabled = false;
+            document.getElementById('btn-send').style.display = '';
+            document.getElementById('btn-step').disabled = true;
+
+            setInfo('Click <b>"Send packet"</b> to watch a JSON command travel from the ethernet cable → NIC → RAM → kernel TCP engine → port lookup → socket buffer → Blender. Each component lights up as data passes through. <b>Click any component</b> at any time for a detailed technical popup.');
+            closePopup();
+        }
+
+    </script>
+</body>
+
+</html>
